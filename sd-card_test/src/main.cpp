@@ -25,7 +25,7 @@ int myFunction(int, int);
 void setup() {
   Serial.begin(115200);
 
-  // Инициализация шины SPI с нашими пинами
+  // Init sd card with pins
   SPI_SD.begin(SD_SCLK, SD_MISO, SD_MOSI, SD_CS);
 
 
@@ -36,8 +36,17 @@ void setup() {
 
   Serial.println("SD init is done!");
 
+  //Check exist file, if this exist - make new with new number 
+  int i{0};
+  
+  for(;(SD.exists(("/data" + String(i) + ".csv")) == 1); i++){
+    Serial.print(i);
+    Serial.println("  is exists");
+  }
 
-  logFile = SD.open("/data.csv", FILE_WRITE);
+  Serial.println("data" + String(i) + ".csv");
+
+  logFile = SD.open("/data" + String(i) + ".csv", FILE_WRITE);
 
   if (!logFile){
     Serial.println("File error");
