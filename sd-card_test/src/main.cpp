@@ -19,8 +19,7 @@ SPIClass SPI_ADXL(FSPI);
 
 SPISettings settings(5000000, MSBFIRST, SPI_MODE3);
 
-// put function declarations here:
-int myFunction(int, int);
+
 
 void setup() {
   Serial.begin(115200);
