@@ -52,6 +52,8 @@ File dataFile;
 
 //haven't interrupt on icm42688 it's hotfix
 unsigned long last_time{};
+unsigned long last_icm{};
+
 
 void safetyWriteData(){
 	status = 1;
@@ -88,8 +90,9 @@ void writeRegister(byte regAddr, uint8_t value, uint8_t CS_PIN){
 
 
 void readAccelRaw(int16_t &ax, int16_t &ay, int16_t &az, uint8_t CS_PIN){
-	if(micros()- last_time>500){
-		last_time = micros();
+	if(micros()- last_icm>500){
+		last_icm = micros();
+
 		int16_t buffer[6];
 		icm_spi.beginTransaction(setting);
 
@@ -97,13 +100,57 @@ void readAccelRaw(int16_t &ax, int16_t &ay, int16_t &az, uint8_t CS_PIN){
 		icm_spi.transfer(0x1F | READ);
 		for (int i = 0; i < 6; i++) {
 			buffer[i] = icm_spi.transfer(0x00);
+		}
+		digitalWrite(CS_PIN, HIGH);
+		icm_spi.endTransaction();
+		ax = (int16_t)((buffer[0] << 8) | buffer[1]);
+		ay = (int16_t)((buffer[2] << 8) | buffer[3]);
+		az = (int16_t)((buffer[4] << 8) | buffer[5]);
 	}
-	digitalWrite(CS_PIN, HIGH);
-	icm_spi.endTransaction();
-	ax = (int16_t)((buffer[0] << 8) | buffer[1]);
-	ay = (int16_t)((buffer[2] << 8) | buffer[3]);
-	az = (int16_t)((buffer[4] << 8) | buffer[5]);
+}
+
+
+void readAccelRawBoth(int16_t &ax_0, int16_t &ay_0, int16_t &az_0, uint8_t CS_PIN_0, int16_t &ax_1, int16_t &ay_1, int16_t &az_1, uint8_t CS_PIN_1){
+
+	if(millis()-last_icm>500){
+		last_icm = millis();
+		int16_t buffer[6];
+
+
+		icm_spi.beginTransaction(setting);
+
+		digitalWrite(CS_PIN_0, LOW);
+		icm_spi.transfer(0x1F | READ);
+		for (int i = 0; i < 6; i++) {
+			buffer[i] = icm_spi.transfer(0x00);
+		}
+		digitalWrite(CS_PIN_0, HIGH);
+
+		icm_spi.endTransaction();
+
+		ax_0 = (int16_t)((buffer[0] << 8) | buffer[1]);
+		ay_0 = (int16_t)((buffer[2] << 8) | buffer[3]);
+		az_0 = (int16_t)((buffer[4] << 8) | buffer[5]);
+
+
+		icm_spi.beginTransaction(setting);
+
+		digitalWrite(CS_PIN_1, LOW);
+		icm_spi.transfer(0x1F | READ);
+		for (int i = 0; i < 6; i++) {
+			buffer[i] = icm_spi.transfer(0x00);
+		}
+		digitalWrite(CS_PIN_1, HIGH);
+
+		icm_spi.endTransaction();
+		
+		ax_1 = (int16_t)((buffer[0] << 8) | buffer[1]);
+		ay_1 = (int16_t)((buffer[2] << 8) | buffer[3]);
+		az_1 = (int16_t)((buffer[4] << 8) | buffer[5]);
+
 	}
+
+
 }
 
 
@@ -111,9 +158,11 @@ struct packet_0{
     int16_t ax_0,ay_0,az_0;  
 }accel_0;
 
+
 struct packet_1{
     int16_t ax_1,ay_1,az_1;  
 }accel_1;
+
 
 struct dataAccel{
     unsigned long time[256];    //1 element massive has weight 4 bytes
@@ -122,19 +171,14 @@ struct dataAccel{
 }packet;
 
 
-
-
-
 void fillPacket(){
   Serial.println("Start cycle");
-  
+  unsigned long a{}, b{};
+  a = micros();
   for(uint16_t i{0}; i<256; ++i){
         int16_t ax_0{}, ay_0{}, az_0{};
         int16_t ax_1{}, ay_1{}, az_1{};
-
-        readAccelRaw(ax_0,ay_0,az_0,ICM_CS_0);
-        readAccelRaw(ax_1,ay_1,az_1,ICM_CS_1);
-    
+		readAccelRawBoth(ax_0,ay_0,az_0,ICM_CS_0,ax_1,ay_1,az_1,ICM_CS_1);    
 
         accel_0.ax_0 = ax_0;
         accel_0.ay_0 = ay_0;
@@ -149,7 +193,11 @@ void fillPacket(){
         packet.time[i]       = micros();
         Serial.println(i);
   }
+  b = micros();
+  Serial.print("Full time write bufer:	");
+  Serial.println(b-a);
 }
+
 
 void setup(){
 	//initialization Serial
@@ -268,21 +316,21 @@ void setup(){
 	delay(500);
 
 
-	fillPacket();
-	Serial.print("Size packet:	");
-	Serial.println(sizeof(packet));
+	// fillPacket();
+	// Serial.print("Size packet:	");
+	// Serial.println(sizeof(packet));
 
-	Serial.println("Start write on sd card");
+	// Serial.println("Start write on sd card");
 	
-	uint64_t a{},b{};
+	// uint64_t a{},b{};
 
 	
-	a = micros();
-	file.write((uint8_t*)&packet, 4096);
-	b = micros();
-	Serial.println(b-a);
-	file.flush();
-	file.close();
+	// a = micros();
+	// file.write((uint8_t*)&packet, 4096);
+	// b = micros();
+	// Serial.println(b-a);
+	// file.flush();
+	// file.close();
 	
 	
 
@@ -296,37 +344,58 @@ void setup(){
 
 
 void loop(){
-  // int16_t ax_0, ay_0, az_0;
-  // int16_t ax_1, ay_1, az_1;
+	int16_t ax_0, ay_0, az_0;
+	int16_t ax_1, ay_1, az_1;
 
+	unsigned long a{}, b{};
+	a=micros();
+	readAccelRawBoth(ax_0,ay_0,az_0,ICM_CS_0,ax_1,ay_1,az_1,ICM_CS_1);
+	b=micros();
+	Serial.print("Time get data:	");
+	Serial.println(b-a);
+	delay(1000);
+//   int16_t ax_1, ay_1, az_1;
+
+	
+
+	//delay(500);
+
+//   readAccelRaw(ax_1, ay_1, az_1, ICM_CS_1);
+
+//   Serial.print(micros());
+//   Serial.print(";");
+//   Serial.print(ax_0);
+//   Serial.print(";");
+//   Serial.print(ay_0);
+//   Serial.print(";");
+//   Serial.print(az_0);
+
+//   Serial.print(";");
+
+//   Serial.print(ax_1);
+//   Serial.print(";");
+//   Serial.print(ay_1);
+//   Serial.print(";");
+//   Serial.print(az_1);
+//   Serial.println(";");
+//   Serial.println(status);
+	// if(millis()- last_time > 1000){
+	// 	last_time = millis();
+	// 	//Serial.println("every 1 second... maybe...");
+
+	// }
+	// if(micros()- last_time > 1000*1000){
+	// 	last_time = micros();
+	// 	Serial.println("every 1 second... maybe...");
+
+	// 	a = micros();
+	// 	readAccelRaw(ax_0, ay_0, az_0, ICM_CS_0);
+	// 	b = micros();
+	// 	Serial.println(b-a);
+
+	// }
   
-  // readAccelRaw(ax_0, ay_0, az_0, ICM_CS_0);
-  // readAccelRaw(ax_1, ay_1, az_1, ICM_CS_1);
 
-  // Serial.print(micros());
-  // Serial.print(";");
-  // Serial.print(ax_0);
-  // Serial.print(";");
-  // Serial.print(ay_0);
-  // Serial.print(";");
-  // Serial.print(az_0);
-
-  // Serial.print(";");
-
-  // Serial.print(ax_1);
-  // Serial.print(";");
-  // Serial.print(ay_1);
-  // Serial.print(";");
-  // Serial.print(az_1);
-  // Serial.println(";");
-  //Serial.println(status);
-  // if(millis()- last_time > 1000){
-    // last_time = millis();
-    // Serial.println("every 1 second... maybe...");
-// 
-  // }
-  // 
-// 
-  // delay(500);
+//   delay(500);
 }
 
