@@ -107,28 +107,53 @@ void readAccelRaw(int16_t &ax, int16_t &ay, int16_t &az, uint8_t CS_PIN){
 }
 
 
-struct dataAccel
-{
-  uint32_t time;
-  int16_t ax_0, ay_0, az_0;
-  int16_t ax_1, ay_1, az_1;
-};
+struct packet_0{
+    uint16_t ax_0,ay_0,az_0;  
+}accel_0;
+
+struct packet_1{
+    uint16_t ax_1,ay_1,az_1;  
+}accel_1;
+
+struct dataAccel{
+    unsigned long time[256];    //1 element massive has weight 4 bytes
+    packet_0 a_massiv_0[256];   //1 element massive has weight 6 bytes
+    packet_1 a_massiv_1[256];   //1 element massive has weight 6 bytes
+}packet;
 
 
-dataAccel readAccels(){
-  dataAccel result;
-  readAccelRaw(result.ax_0, result.ay_0, result.az_0, ICM_CS_0);
-  readAccelRaw(result.ax_1, result.ay_1, result.az_1, ICM_CS_1);
-  result.time = micros();
-  return result;
+
+
+
+void fillPacket(){
+  Serial.println("Start cycle");
+  
+  for(uint16_t i{0}; i<=256; ++i){
+        Serial.print("goida");
+        int16_t ax_0, ay_0, az_0;
+        int16_t ax_1, ay_1, az_1;
+
+        readAccelRaw(ax_0,ay_0,az_0,ICM_CS_0);
+        readAccelRaw(ax_1,ay_1,az_1,ICM_CS_1);
+    
+
+        accel_0.ax_0 = ax_0;
+        accel_0.ay_0 = ay_0;
+        accel_0.az_0 = az_0;
+
+        accel_1.ax_1 = ax_1;
+        accel_1.ay_1 = ay_1;
+        accel_1.az_1 = az_1;
+
+        packet.a_massiv_0[i] = accel_0;
+        packet.a_massiv_1[i] = accel_1;
+        packet.time[i]       = micros();
+        Serial.println(i);
+        //Serial.println(packet.time[i]); //BUGS
+        Serial.print(packet.time[5]);
+        delay(150);
+  }
 }
-
-
-void collectData(){
-  bufferA[massivIndex] = readAccels;
-
-}
-
 
 void setup(){
   //initialization Serial
@@ -244,8 +269,16 @@ void setup(){
   writeRegister(0x4E, 0x0F, ICM_CS_0);
   writeRegister(0x4E, 0x0F, ICM_CS_1);
   delay(500);
+  fillPacket();
 
-  Serial.println(sizeof(dataAccel));
+
+  
+  Serial.print("Start write on bufer");
+  Serial.println(packet.time[5]);
+  Serial.println(packet.time[20]);
+
+
+
 
 
 
@@ -254,12 +287,12 @@ void setup(){
 
 
 void loop(){
-  int16_t ax_0, ay_0, az_0;
-  int16_t ax_1, ay_1, az_1;
+  // int16_t ax_0, ay_0, az_0;
+  // int16_t ax_1, ay_1, az_1;
 
   
-  readAccelRaw(ax_0, ay_0, az_0, ICM_CS_0);
-  readAccelRaw(ax_1, ay_1, az_1, ICM_CS_1);
+  // readAccelRaw(ax_0, ay_0, az_0, ICM_CS_0);
+  // readAccelRaw(ax_1, ay_1, az_1, ICM_CS_1);
 
   // Serial.print(micros());
   // Serial.print(";");
@@ -277,13 +310,14 @@ void loop(){
   // Serial.print(";");
   // Serial.print(az_1);
   // Serial.println(";");
-  Serial.println(status);
-  if(millis()- last_time > 1000){
-    last_time = millis();
-    Serial.println("every 1 second... maybe...");
-
-  }
-  
-
-  delay(500);
+  //Serial.println(status);
+  // if(millis()- last_time > 1000){
+    // last_time = millis();
+    // Serial.println("every 1 second... maybe...");
+// 
+  // }
+  // 
+// 
+  // delay(500);
 }
+
