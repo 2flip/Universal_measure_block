@@ -39,7 +39,7 @@ on bright white. I cannot find a way to simply disable it.
 
 void setup() {
   //Wire.begin(I2C_SDA, I2C_SCL);
-  Wire.begin(17, 18);
+  Wire.begin(17, 16);
   //Wire.begin(5, 4);
   //Wire.begin(33, 32);
   pinMode(rgbledPin, OUTPUT);
