@@ -1,10 +1,9 @@
 #include    <Arduino.h>
-#include    <Wire.h>
-//#include    <FS.h>
-//#include    <SD.h>
-//#include    <SPI.h>
-//#include    <Adafruit_NeoPixel.h>
-
+#include    <FS.h>
+#include    <SD.h>
+#include    <SPI.h>
+#include    <Adafruit_NeoPixel.h>
+#include    <ESP32_SoftWire.h>
 //Adafruit_NeoPixel LED_RGB(1, 48, NEO_GRBW + NEO_KHZ800);
 
 //ICM pins
@@ -23,11 +22,12 @@
 
 
 //registers ICM42688
-#define UB0_REG_INT_CONFIG1   0x64
-#define UB0_REG_INT_CONFIG    0x14
-#define UB0_REG_INT_SOURCE0   0x65
+#define UB0_REG_INT_CONFIG1     0x64
+#define UB0_REG_INT_CONFIG      0x14
+#define UB0_REG_INT_SOURCE0     0x65
+#define UB0_REG_TEMP_DATA1      0x1D
 
-
+size_t _numBytes = 0;
 
 volatile bool dataReady = false;
 
@@ -39,15 +39,21 @@ void IRAM_ATTR setICMFlag()
 }
 
 
+SoftWire i2c;
 
-// File dataFile;
+File dataFile;
 
-// SPIClass sd_spi(HSPI);
-// SPISettings setting(1000000,  MSBFIRST,SPI_MODE0);
+SPIClass sd_spi(HSPI);
+SPISettings setting(1000000,  MSBFIRST,SPI_MODE0);
 
 uint8_t reg{}, accel_setup{}, temp{};
 
-int16_t ICM42688Data[3]; 
+
+uint8_t _buffer[15] = {};
+int16_t _rawT      = 0;
+int16_t _rawAcc[3] = {};
+int16_t _rawGyr[3] = {};
+float _t      = 0.0f;
 
 
 
@@ -55,21 +61,21 @@ int16_t ICM42688Data[3];
 uint8_t readRegisterI2C(uint8_t Addr_Device, uint8_t Reg, uint8_t N){
 
     uint8_t res{};
-    Wire.beginTransmission(Addr_Device);
-    Wire.write(Reg);
+    i2c.beginTransmission(Addr_Device);
+    i2c.write(Reg);
 
     //check error transmissiobn
-    res = Wire.endTransmission(true);
+    res = i2c.endTransmission(true);
 
     delay(10);
  
-    Wire.requestFrom(Addr_Device, N);
-    if(Wire.available()==N){
-        res = Wire.read();
+    i2c.requestFrom(Addr_Device, N);
+    if(i2c.available()==N){
+        res = i2c.read();
 
     }
     
-    //Wire.endTransmission(true);
+    //i2c.endTransmission(true);
     return(res);
         
 }
@@ -77,10 +83,10 @@ uint8_t readRegisterI2C(uint8_t Addr_Device, uint8_t Reg, uint8_t N){
 
 //Addr_Device = Device Address; Reg = Register; value = value of register
 void writeRegisterI2C(uint8_t Addr_Device,uint8_t Reg,uint8_t value){
-    Wire.beginTransmission(Addr_Device);
-    Wire.write(Reg);
-    Wire.write(value);
-    Wire.endTransmission(true);
+    i2c.beginTransmission(Addr_Device);
+    i2c.write(Reg);
+    i2c.write(value);
+    i2c.endTransmission(true);
 }
 
 
@@ -104,27 +110,44 @@ dataAccel packet0, packet1;
 
 
 
-void readRegisterforAccel(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * dest){
-    Wire.beginTransmission(address);
-    Wire.write(subAddress);
-    Wire.endTransmission(false);
-    uint8_t i {0};
-    Wire.requestFrom(address, count);
-    while(Wire.available()){
-        dest[i++] = Wire.read();
+
+int readRegisterMultiply(uint8_t Addr_Device, uint8_t Reg, uint8_t count, uint8_t* dest){
+    i2c.beginTransmission(Addr_Device);
+    i2c.write(Reg);
+    i2c.endTransmission(true);
+    _numBytes = i2c.requestFrom(Addr_Device, count);
+    if(_numBytes == count){
+        for(uint8_t i{}; i<count; i++){
+            dest[i] = i2c.read();
+        }
+        return(1);
+    }else{
+        return(-1);
     }
 }
 
 
-void readDataAccel(int16_t *destination, uint8_t ICM_ADDRES){
-    uint8_t rawData[7];
-    readRegisterforAccel(ICM_ADDRES, 0x1D, 14, &rawData[0]);
-    destination[0] = ((int16_t)rawData[0] << 8) | rawData[1] ;  // Turn the MSB and LSB into a signed 16-bit value
-    destination[1] = ((int16_t)rawData[2] << 8) | rawData[3] ;  
-    destination[2] = ((int16_t)rawData[4] << 8) | rawData[5] ; 
-    destination[3] = ((int16_t)rawData[6] << 8) | rawData[7] ;   
+int getRawAGT(uint8_t Addr_Device){
+    if(readRegisterMultiply(Addr_Device, UB0_REG_TEMP_DATA1, 14, _buffer)<0){
+        return(-1);
+    }
+
+    int16_t rawMeas[7];
+    for(size_t i = 0; i<7; i++){
+        rawMeas[i] = ((int16_t)_buffer[i * 2] << 8) | _buffer[i * 2 + 1];
+    }
+
+	_rawT      = rawMeas[0];
+	_rawAcc[0] = rawMeas[1];
+	_rawAcc[1] = rawMeas[2];
+	_rawAcc[2] = rawMeas[3];
+	_rawGyr[0] = rawMeas[4];
+	_rawGyr[1] = rawMeas[5];
+	_rawGyr[2] = rawMeas[6];
 }
-//after succesfully write data on sd card we will be wire.end();
+
+
+
 
 
 void enableDataReadyInterrupt(){
@@ -138,7 +161,7 @@ void enableDataReadyInterrupt(){
 
 
 void setup(){
-    Serial.begin(500000);
+    Serial.begin(115200);
 
     // LED_RGB.begin();
     // LED_RGB.setBrightness(100);
@@ -155,8 +178,8 @@ void setup(){
 
 
     //setup I2C
-    Wire.begin(ICM_SDA, ICM_SCL);//Wire.begin(SDA, SCL)
-    Wire.setClock(1000*1000); //1MHz
+    i2c.begin(ICM_SDA, ICM_SCL);//Wire.begin(SDA, SCL)
+    i2c.setClock(1000*1000); //
 
     //check whoami icm
     Serial.print("Check ICM:    ");
@@ -250,20 +273,18 @@ void loop(){
         
     // }
     if(dataReady){
-        Serial.print("Connect!  ");
+        // Serial.print("Connect!  ");
         dataReady = false;
-        readDataAccel(ICM42688Data, ICM_0_ADD);
-        ax = ICM42688Data[1];
-        ay = ICM42688Data[2];
-        az = ICM42688Data[3];
-        Serial.print(ax);
-        Serial.print(';');
-        Serial.print(ay);
-        Serial.print(';');
-        Serial.println(az);
+        // Serial.println(micros());
+        getRawAGT(ICM_0_ADD);
+        _t = (static_cast<float>(_rawT)/132.48f) + 25.0f;
+        //Serial.println(_t);
+        Serial.print(_rawAcc[0]);
+        Serial.print("  ");
+        Serial.print(_rawAcc[1]);
+        Serial.print("  ");
+        Serial.println(_rawAcc[2]);
 
-
-        Serial.println(micros());
 
     }
 
