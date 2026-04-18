@@ -12,7 +12,7 @@
 #define ICM_1_ADD           //addres icm_1   
 #define ICM_SCL     4      //correct problems with 
 #define ICM_SDA     5      //
-#define ICM_INT_0   12
+#define ICM_INT_0   6
 #define ICM_INT_1
 
 //SD card pins
@@ -22,8 +22,24 @@
 #define SD_CLK      36
 
 
-bool newICM42688Data = false;
- 
+//registers ICM42688
+#define UB0_REG_INT_CONFIG1   0x64
+#define UB0_REG_INT_CONFIG    0x14
+#define UB0_REG_INT_SOURCE0   0x65
+
+
+
+volatile bool dataReady = false;
+
+
+//INTERRUPT FOR ESP32
+void IRAM_ATTR setICMFlag()
+{
+  dataReady = true;
+}
+
+
+
 // File dataFile;
 
 // SPIClass sd_spi(HSPI);
@@ -31,10 +47,7 @@ bool newICM42688Data = false;
 
 uint8_t reg{}, accel_setup{}, temp{};
 
-void myinthandler1()
-{
-  newICM42688Data = true;
-}
+int16_t ICM42688Data[3]; 
 
 
 
@@ -89,25 +102,56 @@ struct dataAccel{
 dataAccel packet0, packet1;
 
 
-uint8_t ICM_DRstatus(){
-    uint8_t temp = readRegisterI2C(ICM_0_ADD, 0x2D,1);
-    return temp;
 
+
+void readRegisterforAccel(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * dest){
+    Wire.beginTransmission(address);
+    Wire.write(subAddress);
+    Wire.endTransmission(false);
+    uint8_t i {0};
+    Wire.requestFrom(address, count);
+    while(Wire.available()){
+        dest[i++] = Wire.read();
+    }
 }
 
 
+void readDataAccel(int16_t *destination, uint8_t ICM_ADDRES){
+    uint8_t rawData[7];
+    readRegisterforAccel(ICM_ADDRES, 0x1D, 14, &rawData[0]);
+    destination[0] = ((int16_t)rawData[0] << 8) | rawData[1] ;  // Turn the MSB and LSB into a signed 16-bit value
+    destination[1] = ((int16_t)rawData[2] << 8) | rawData[3] ;  
+    destination[2] = ((int16_t)rawData[4] << 8) | rawData[5] ; 
+    destination[3] = ((int16_t)rawData[6] << 8) | rawData[7] ;   
+}
 //after succesfully write data on sd card we will be wire.end();
 
+
+void enableDataReadyInterrupt(){
+    writeRegisterI2C(ICM_0_ADD, UB0_REG_INT_CONFIG, 0x18|0x03);
+    uint8_t reg;
+    reg = readRegisterI2C(ICM_0_ADD, UB0_REG_INT_CONFIG1, 1);
+    reg &= ~0x10;
+    writeRegisterI2C(ICM_0_ADD, UB0_REG_INT_CONFIG1, reg);
+    writeRegisterI2C(ICM_0_ADD, UB0_REG_INT_SOURCE0, 0x18);
+}
+
+
 void setup(){
-    Serial.begin(115200);
+    Serial.begin(500000);
 
     // LED_RGB.begin();
     // LED_RGB.setBrightness(100);
     // LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(244, 255, 29)));
     // LED_RGB.show();
 
-    pinMode(ICM_INT_0, INPUT);//interrupt pins
-    attachInterrupt(ICM_INT_0, myinthandler1, RISING);
+    Serial.println(digitalRead(ICM_INT_0));
+
+    pinMode(ICM_INT_0, INPUT_PULLDOWN);//interrupt pins
+
+    attachInterrupt(ICM_INT_0, setICMFlag, RISING);
+
+    Serial.println(digitalRead(ICM_INT_0));
 
 
     //setup I2C
@@ -146,11 +190,11 @@ void setup(){
     //turn low noise mode on accel
     writeRegisterI2C(ICM_0_ADD,0x4E, 0x0F);
 
-    //push-pull, pulsed, active HIGH interrupts  
-    // writeRegisterI2C(ICM_0_ADD, 0x14,0x18 | 0x03);
-    // temp = readRegisterI2C(ICM_0_ADD,0x64, 1);
-    // writeRegisterI2C(ICM_0_ADD, 0x64,temp&~(0x10));
-    // writeRegisterI2C(ICM_0_ADD, 0x65, 0x08);
+    Serial.print("Status FLAG INTERRUPT befor enable:  ");
+
+    enableDataReadyInterrupt();
+
+
 
 
 
@@ -172,8 +216,7 @@ void setup(){
     //     while(1);
     // }
     
-    
-    
+
     //enable icm
     writeRegisterI2C(ICM_0_ADD, 0x4E, 0x0F);
 
@@ -181,12 +224,11 @@ void setup(){
     // LED_RGB.show();
 
 
-    // //ICM_DRstatus();
-    if(newICM42688Data = true){
-        Serial.println("INTERRUPT WORK !!!!!");
-    }
+
+
+
+
     
-    // RUSSIA();
 
 
 
@@ -199,7 +241,30 @@ void setup(){
 
 }
 
-
+int16_t ax{}, ay{}, az{};
 void loop(){
+
+    // if(dataReady = true){
+    //     dataReady = false;
+    //     Serial.println("dataReady");
+        
+    // }
+    if(dataReady){
+        Serial.print("Connect!  ");
+        dataReady = false;
+        readDataAccel(ICM42688Data, ICM_0_ADD);
+        ax = ICM42688Data[1];
+        ay = ICM42688Data[2];
+        az = ICM42688Data[3];
+        Serial.print(ax);
+        Serial.print(';');
+        Serial.print(ay);
+        Serial.print(';');
+        Serial.println(az);
+
+
+        Serial.println(micros());
+
+    }
 
 }
