@@ -2,17 +2,15 @@
 #include    <FS.h>
 #include    <SD.h>
 #include    <SPI.h>
-#include    <Adafruit_NeoPixel.h>
 #include    <ESP32_SoftWire.h>
-//Adafruit_NeoPixel LED_RGB(1, 48, NEO_GRBW + NEO_KHZ800);
 
 //ICM pins
 #define ICM_0_ADD   0x68    //addres icm_0
-#define ICM_1_ADD           //addres icm_1   
-#define ICM_SCL     4      //correct problems with 
-#define ICM_SDA     5      //
+#define ICM_1_ADD   1       //addres icm_1   
+#define ICM_SCL     4       //correct problems with 
+#define ICM_SDA     5       //
 #define ICM_INT_0   6
-#define ICM_INT_1
+#define ICM_INT_1   8
 
 //SD card pins
 #define SD_CS       39
@@ -29,18 +27,22 @@
 
 size_t _numBytes = 0;
 
-volatile bool dataReady = false;
-
-
+//volatile bool dataReady0 = false;  //ALARM AFTE TEST REMOVE THIS
+volatile bool FLAG_SOFT = false;
+bool dataReady0 = true;
+bool dataReady1 = true;
 //INTERRUPT FOR ESP32
 void IRAM_ATTR setICMFlag()
 {
-  dataReady = true;
+  dataReady0 = true;
 }
 
 
-SoftWire i2c;
+void IRAM_ATTR softSave(){
+    FLAG_SOFT = true;
+}
 
+SoftWire i2c;
 File dataFile;
 
 SPIClass sd_spi(HSPI);
@@ -75,7 +77,6 @@ uint8_t readRegisterI2C(uint8_t Addr_Device, uint8_t Reg, uint8_t N){
 
     }
     
-    //i2c.endTransmission(true);
     return(res);
         
 }
@@ -148,7 +149,7 @@ int getRawAGT(uint8_t Addr_Device){
 
 
 
-
+bool FLAG_BUFFER_0{false} , FLAG_BUFFER_1{false};
 
 void enableDataReadyInterrupt(){
     writeRegisterI2C(ICM_0_ADD, UB0_REG_INT_CONFIG, 0x18|0x03);
@@ -159,23 +160,157 @@ void enableDataReadyInterrupt(){
     writeRegisterI2C(ICM_0_ADD, UB0_REG_INT_SOURCE0, 0x18);
 }
 
+void fillPacket(uint8_t Addr_Device_0, uint8_t Addr_Device_1){
+    if(FLAG_BUFFER_0<256){
+        if(dataReady0 && dataReady1){
+            Serial.println(FLAG_BUFFER_0);
+            dataReady0  =   false;
+            //dataReady1  =   false;//УБРАТЬ ДЕВАЙС 0 ИЗ ЭТОЙ ШТУКИ
+
+            getRawAGT(Addr_Device_0);
+            accel_0.ax_0 = _rawAcc[0];
+            accel_0.ay_0 = _rawAcc[1];
+            accel_0.az_0 = _rawAcc[2];
+            packet0.a_massiv_0[FLAG_BUFFER_0] = accel_0;
+            packet0.time[FLAG_BUFFER_0]= micros();
+
+            getRawAGT(Addr_Device_0);//УБРАТЬ ДЕВАЙС 0 ИЗ ЭТОЙ ШТУКИ
+            accel_1.ax_1 = _rawAcc[0];
+            accel_1.ay_1 = _rawAcc[1];
+            accel_1.az_1 = _rawAcc[2];
+            packet0.a_massiv_1[FLAG_BUFFER_0] = accel_1;
+            FLAG_BUFFER_0++;
+
+        }  
+   }
+   if(FLAG_BUFFER_1<256){
+        Serial.println(FLAG_BUFFER_1);
+        dataReady0  =   false;
+        //dataReady1  =   false;//УБРАТЬ ДЕВАЙС 0 ИЗ ЭТОЙ ШТУКИ
+
+        getRawAGT(Addr_Device_0);
+        accel_0.ax_0 = _rawAcc[0];
+        accel_0.ay_0 = _rawAcc[1];
+        accel_0.az_0 = _rawAcc[2];
+        packet0.a_massiv_0[FLAG_BUFFER_0] = accel_0;
+        packet0.time[FLAG_BUFFER_0]= micros();
+
+        getRawAGT(Addr_Device_0);//УБРАТЬ ДЕВАЙС 0 ИЗ ЭТОЙ ШТУКИ
+        accel_1.ax_1 = _rawAcc[0];
+        accel_1.ay_1 = _rawAcc[1];
+        accel_1.az_1 = _rawAcc[2];
+        packet0.a_massiv_1[FLAG_BUFFER_0] = accel_1;
+        FLAG_BUFFER_1++;
+
+   }
+}
+
+void fillPacket_TEST_FUNCTION_ALARM(uint8_t Addr_Device_0, uint8_t Addr_Device_1){
+    if(FLAG_BUFFER_0<256 &&(dataReady0 && dataReady1)){
+        Serial.println(FLAG_BUFFER_0);
+        dataReady0  =   false;
+        //dataReady1  =   false;//УБРАТЬ ДЕВАЙС 0 ИЗ ЭТОЙ ШТУКИ
+
+        getRawAGT(Addr_Device_0);
+        accel_0.ax_0 = 0;
+        accel_0.ay_0 = 1;
+        accel_0.az_0 = 2;
+        packet0.a_massiv_0[FLAG_BUFFER_0] = accel_0;
+        packet0.time[FLAG_BUFFER_0]= micros();
+
+        getRawAGT(Addr_Device_0);//УБРАТЬ ДЕВАЙС 0 ИЗ ЭТОЙ ШТУКИ
+        accel_1.ax_1 = 3;
+        accel_1.ay_1 = 4;
+        accel_1.az_1 = 5;
+        packet0.a_massiv_1[FLAG_BUFFER_0] = accel_1;
+        FLAG_BUFFER_0++;
+    }
+    
+   if(FLAG_BUFFER_1<256 &&(dataReady0 && dataReady1)){
+        Serial.println(FLAG_BUFFER_1);
+        dataReady0  =   false;
+        //dataReady1  =   false;//УБРАТЬ ДЕВАЙС 0 ИЗ ЭТОЙ ШТУКИ
+
+        getRawAGT(Addr_Device_0);
+        accel_0.ax_0 = 0;
+        accel_0.ay_0 = 1;
+        accel_0.az_0 = 2;
+        packet0.a_massiv_0[FLAG_BUFFER_0] = accel_0;
+        packet0.time[FLAG_BUFFER_0]= micros();
+
+        getRawAGT(Addr_Device_0);//УБРАТЬ ДЕВАЙС 0 ИЗ ЭТОЙ ШТУКИ
+        accel_1.ax_1 = 3;
+        accel_1.ay_1 = 4;
+        accel_1.az_1 = 5;
+        packet0.a_massiv_1[FLAG_BUFFER_0] = accel_1;
+        FLAG_BUFFER_1++;
+
+   }
+}
+
+void fillPacket_2(uint8_t Addr_Device_0, uint8_t Addr_Device_1){
+    if(FLAG_BUFFER_0 == false){
+        for(uint i{}; i<256; i++){
+            if(dataReady0){
+                Serial.println(i);
+                getRawAGT(Addr_Device_0);
+                accel_0.ax_0 = 0;
+                accel_0.ay_0 = 1;
+                accel_0.az_0 = 2;
+                packet0.a_massiv_0[FLAG_BUFFER_0] = accel_0;
+                
+                getRawAGT(Addr_Device_0);//УБРАТЬ ДЕВАЙС 0 ИЗ ЭТОЙ ШТУКИ
+                accel_1.ax_1 = 3;
+                accel_1.ay_1 = 4;
+                accel_1.az_1 = 5;
+                packet0.a_massiv_1[FLAG_BUFFER_0] = accel_1;
+
+                packet0.time[FLAG_BUFFER_0]= micros();
+            }
+
+            
+        }
+        FLAG_BUFFER_0 = true;
+        
+
+
+
+    }else if(FLAG_BUFFER_1 == false && FLAG_BUFFER_0 == true){
+        Serial.println("bufer0 is busy");
+        for(uint i{}; i<256; i++){
+            if(dataReady0){
+                Serial.println(i);
+                getRawAGT(Addr_Device_0);
+                accel_0.ax_0 = 0;
+                accel_0.ay_0 = 1;
+                accel_0.az_0 = 2;
+                packet0.a_massiv_0[FLAG_BUFFER_0] = accel_0;
+                packet0.time[FLAG_BUFFER_0]= micros();
+
+                getRawAGT(Addr_Device_0);//УБРАТЬ ДЕВАЙС 0 ИЗ ЭТОЙ ШТУКИ
+                accel_1.ax_1 = 3;
+                accel_1.ay_1 = 4;
+                accel_1.az_1 = 5;
+                packet0.a_massiv_1[FLAG_BUFFER_0] = accel_1;
+            }
+            
+
+        }
+        FLAG_BUFFER_1 = true; 
+           
+        
+    }
+
+}
 
 void setup(){
     Serial.begin(115200);
 
-    // LED_RGB.begin();
-    // LED_RGB.setBrightness(100);
-    // LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(244, 255, 29)));
-    // LED_RGB.show();
-
-    Serial.println(digitalRead(ICM_INT_0));
-
     pinMode(ICM_INT_0, INPUT_PULLDOWN);//interrupt pins
-
     attachInterrupt(ICM_INT_0, setICMFlag, RISING);
-
-    Serial.println(digitalRead(ICM_INT_0));
-
+    pinMode(20, OUTPUT);
+    pinMode(47, INPUT_PULLDOWN);
+    attachInterrupt(47, softSave, RISING);
 
     //setup I2C
     i2c.begin(ICM_SDA, ICM_SCL);//Wire.begin(SDA, SCL)
@@ -185,107 +320,94 @@ void setup(){
     Serial.print("Check ICM:    ");
     Serial.println(readRegisterI2C(ICM_0_ADD, 0x75, 1));
 
-
     //set ODR 1KHz
     reg = readRegisterI2C(ICM_0_ADD, 0x50, 1);
     reg = 0x06 | (reg & 0xF0);
     writeRegisterI2C(ICM_0_ADD, 0x50, reg);
-
     
     //Check ODR setting
     accel_setup = readRegisterI2C(ICM_0_ADD, 0x50, 1);
     accel_setup = (accel_setup & 0x0F); 
     Serial.println(accel_setup, BIN);
 
-
     //set FS +-16 g
     reg = readRegisterI2C(ICM_0_ADD, 0x50, 1);
     reg = (0x00 <<5) | (reg & 0x1F);
     writeRegisterI2C(ICM_0_ADD, 0x50, reg);
-
 
     //check FS setting
     accel_setup = readRegisterI2C(ICM_0_ADD, 0x50, 1);
     accel_setup = (accel_setup & 0xE0)>>5;
     Serial.println(accel_setup, BIN);
 
-
     //turn low noise mode on accel
     writeRegisterI2C(ICM_0_ADD,0x4E, 0x0F);
 
-    Serial.print("Status FLAG INTERRUPT befor enable:  ");
-
     enableDataReadyInterrupt();
 
-
-
-
-
-
-
-
-
-
     //init sd card
-    // sd_spi.begin(SD_CLK, SD_MISO, SD_MOSI, SD_CS);
-    // if(!SD.begin(SD_CS, sd_spi)){
-    //     Serial.println("SD card not work!");
-    //     while(1);
-    // }
-    // dataFile = SD.open("/data.bin", FILE_WRITE);
+    sd_spi.begin(SD_CLK, SD_MISO, SD_MOSI, SD_CS);
+    if(!SD.begin(SD_CS, sd_spi)){
+        Serial.println("SD card not work!");
+        while(1);
+    }
+    dataFile = SD.open("/data.bin", FILE_WRITE);
     
-    // if (!dataFile) {
-    //     Serial.println("file faild");
-    //     while(1);
-    // }
+    if (!dataFile) {
+        Serial.println("file faild");
+        while(1);
+    }
     
 
     //enable icm
-    writeRegisterI2C(ICM_0_ADD, 0x4E, 0x0F);
+    writeRegisterI2C(ICM_0_ADD, 0x4E, 0x0F);  
 
-    // LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(0, 89, 255)));
-    // LED_RGB.show();
-
-
-
-
-
-
-    
-
-
-
-
-
-
-     
+    fillPacket_TEST_FUNCTION_ALARM(ICM_0_ADD, ICM_1_ADD);
     
 
 
 }
 
-int16_t ax{}, ay{}, az{};
 void loop(){
 
-    // if(dataReady = true){
-    //     dataReady = false;
-    //     Serial.println("dataReady");
-        
-    // }
-    if(dataReady){
-        // Serial.print("Connect!  ");
-        dataReady = false;
-        // Serial.println(micros());
-        getRawAGT(ICM_0_ADD);
-        _t = (static_cast<float>(_rawT)/132.48f) + 25.0f;
-        //Serial.println(_t);
-        Serial.print(_rawAcc[0]);
-        Serial.print("  ");
-        Serial.print(_rawAcc[1]);
-        Serial.print("  ");
-        Serial.println(_rawAcc[2]);
+    // if(FLAG_SOFT){
+    //     dataFile.flush();
+    //     dataFile.close();       
+    //     while(1){
+    //         Serial.println("The file was saved successfully");
+	// 		delay(10000);
+    //     }
+
+    // }else{
+    //     fillPacket_TEST_FUNCTION_ALARM(ICM_0_ADD, ICM_1_ADD);
+    //     if(FLAG_BUFFER_0 = 255){
+    //         dataFile.write((uint8_t*)&packet0, 4096);
+    //         FLAG_BUFFER_0 = 0;
+    //     }
+    //     if(FLAG_BUFFER_1 = 255){
+    //         dataFile.write((uint8_t*)&packet1, 4096);
+    //         FLAG_BUFFER_1 = 0;
+
+    //     }
+    // }   
+    fillPacket_2(ICM_0_ADD, ICM_1_ADD);
+
+    if(FLAG_BUFFER_0 ==true){
+        dataFile.write((uint8_t*)&packet0, 4096);
+        FLAG_BUFFER_0 = false;
+    }else if(FLAG_BUFFER_1 == true){
+        dataFile.write((uint8_t*)&packet1, 4096);
+        FLAG_BUFFER_0 = false;
+
+    }else if(FLAG_SOFT == true){
+        dataFile.flush();
+        dataFile.close();
+        while(1){
+            Serial.println("data is save");
+            delay(500);
+        }
 
 
     }
-
+    
 }
