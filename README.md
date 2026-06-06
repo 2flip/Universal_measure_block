@@ -11,7 +11,7 @@ which is distributed under the BSD 3-Clause License:
 Copyright (c) [2026] [2flip]
 
 
-![](./files/UMB_boards.jpg)
+![Платы UMB](.files/UMB_boards.jpg)
 
 
 
