@@ -37,8 +37,8 @@ void setup() {
     
     IMU.begin();                                        //init IMU
 
-    writeRegisterI2C(ICM_ADD, ACCEL_CONFIG0, 0x06);     //set 1.6kHz, 32g
-    writeRegisterI2C(ICM_ADD, GYRO_CONFIG0,  0x06);     //set 1.6kHz, 4000dps
+    writeRegisterI2C(ICM_ADD, ACCEL_CONFIG0, 0x06);     //set 800Hz, 32g
+    writeRegisterI2C(ICM_ADD, GYRO_CONFIG0,  0x06);     //set 800Hz, 4000dps
     writeRegisterI2C(ICM_ADD, PWR_MGMT0, 0x0F);         //set low noise, enable accel, gyro
     
     delay(100);
