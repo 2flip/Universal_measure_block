@@ -12,6 +12,6 @@ Copyright (c) [2026] [2flip]
 
 
 ![](./files/UMB_boards.jpg)
-![](./files/UMB.jpg)
+
 
 
