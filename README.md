@@ -12,6 +12,7 @@ Copyright (c) [2026] [2flip]
 
 
 ![Платы UMB](.files/UMB_boards.jpg)
+![Все устройство в составе](.files/UMB.jpg)
 
 
 
