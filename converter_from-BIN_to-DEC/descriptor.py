@@ -1,8 +1,8 @@
 #made with AI
 import struct
 
-binary_file_path = "log__dev_ttyACM1_1.bin"
-output_text_file_path = "data_restored.txt"
+binary_file_path = "log__dev_ttyACM1.bin"
+output_text_file_path = binary_file_path
 
 # Формат пакета данных (без маркеров): 4 числа float = 16 байт
 packet_format = "<f fff fff f"
